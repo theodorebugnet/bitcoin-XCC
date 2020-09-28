@@ -190,6 +190,11 @@ IsMineResult IsMineInner(const LegacyScriptPubKeyMan& keystore, const CScript& s
         }
         break;
     }
+    case TxoutType::XCCLOCK:
+    {
+        // XCC scripts not considered spendable - will need separate XCC wallet to manage XCC-locked funds
+        break;
+    }
     }
 
     if (ret == IsMineResult::NO && keystore.HaveWatchOnly(scriptPubKey)) {

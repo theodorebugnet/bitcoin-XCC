@@ -3,6 +3,10 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <iostream>
+#include <iomanip>
+#include <sstream>
+
 #include <script/sign.h>
 
 #include <key.h>
@@ -13,6 +17,40 @@
 #include <uint256.h>
 
 typedef std::vector<unsigned char> valtype;
+
+void printCScriptPrevector(CScript scr) {
+    for (auto i = scr.begin(); i != scr.end(); i++) {
+        printf("%02x", *i);
+    }
+    std::cout << std::endl;
+}
+
+std::string TxoutTypeToString(TxoutType type) {
+    switch (type) {
+        case TxoutType::NONSTANDARD:
+            return "NONSTANDARD";
+        case TxoutType::PUBKEY:
+            return "PUBKEY";
+        case TxoutType::PUBKEYHASH:
+            return "PUBKEYHASH";
+        case TxoutType::SCRIPTHASH:
+            return "SCRIPTHASH";
+        case TxoutType::MULTISIG:
+            return "MULTISIG";
+        case TxoutType::XCCLOCK:
+            return "XCCLOCK";
+        case TxoutType::NULL_DATA:
+            return "NULL_DATA";
+        case TxoutType::WITNESS_V0_SCRIPTHASH:
+            return "WITNESS_V0_SCRIPTHASH";
+        case TxoutType::WITNESS_V0_KEYHASH:
+            return "WITNESS_V0_KEYHASH";
+        case TxoutType::WITNESS_UNKNOWN:
+            return "WITNESS_UNKNOWN";
+        default:
+            return "UNKNOWN TYPE!";
+    }
+}
 
 MutableTransactionSignatureCreator::MutableTransactionSignatureCreator(const CMutableTransaction* txToIn, unsigned int nInIn, const CAmount& amountIn, int nHashTypeIn) : txTo(txToIn), nIn(nInIn), nHashType(nHashTypeIn), amount(amountIn), checker(txTo, nIn, amountIn) {}
 
@@ -98,6 +136,7 @@ static bool CreateSig(const BaseSignatureCreator& creator, SignatureData& sigdat
 static bool SignStep(const SigningProvider& provider, const BaseSignatureCreator& creator, const CScript& scriptPubKey,
                      std::vector<valtype>& ret, TxoutType& whichTypeRet, SigVersion sigversion, SignatureData& sigdata)
 {
+    std::cout << "\nSIGN STEPPING\n" << std::endl;
     CScript scriptRet;
     uint160 h160;
     ret.clear();
@@ -106,11 +145,14 @@ static bool SignStep(const SigningProvider& provider, const BaseSignatureCreator
     std::vector<valtype> vSolutions;
     whichTypeRet = Solver(scriptPubKey, vSolutions);
 
+    std::cout << "Found TxoutType: " << TxoutTypeToString(whichTypeRet) << std::endl;
+
     switch (whichTypeRet)
     {
     case TxoutType::NONSTANDARD:
     case TxoutType::NULL_DATA:
     case TxoutType::WITNESS_UNKNOWN:
+        std::cout<< "returning false" << std::endl;
         return false;
     case TxoutType::PUBKEY:
         if (!CreateSig(creator, sigdata, provider, sig, CPubKey(vSolutions[0]), scriptPubKey, sigversion)) return false;
@@ -167,13 +209,16 @@ static bool SignStep(const SigningProvider& provider, const BaseSignatureCreator
         CRIPEMD160().Write(&vSolutions[0][0], vSolutions[0].size()).Finalize(h160.begin());
         if (GetCScript(provider, sigdata, CScriptID{h160}, scriptRet)) {
             ret.push_back(std::vector<unsigned char>(scriptRet.begin(), scriptRet.end()));
+            std::cout<< "returning true" << std::endl;
             return true;
         }
         // Could not find witnessScript, add to missing
         sigdata.missing_witness_script = uint256(vSolutions[0]);
+            std::cout<< "returning false" << std::endl;
         return false;
 
     default:
+        std::cout<< "returning false" << std::endl;
         return false;
     }
 }
@@ -197,6 +242,7 @@ static CScript PushAll(const std::vector<valtype>& values)
 
 bool ProduceSignature(const SigningProvider& provider, const BaseSignatureCreator& creator, const CScript& fromPubKey, SignatureData& sigdata)
 {
+    std::cout << "\n\n PRODUCING SIGNATURE" << std::endl;
     if (sigdata.complete) return true;
 
     std::vector<valtype> result;
@@ -205,6 +251,8 @@ bool ProduceSignature(const SigningProvider& provider, const BaseSignatureCreato
     bool P2SH = false;
     CScript subscript;
     sigdata.scriptWitness.stack.clear();
+
+    std::cout << "whichType: " << TxoutTypeToString(whichType) << std::endl;
 
     if (solved && whichType == TxoutType::SCRIPTHASH)
     {
@@ -229,6 +277,7 @@ bool ProduceSignature(const SigningProvider& provider, const BaseSignatureCreato
     }
     else if (solved && whichType == TxoutType::WITNESS_V0_SCRIPTHASH)
     {
+        std::cout << "\nSOLVING WSH\n" << std::endl;
         CScript witnessscript(result[0].begin(), result[0].end());
         sigdata.witness_script = witnessscript;
         TxoutType subType;
@@ -248,6 +297,7 @@ bool ProduceSignature(const SigningProvider& provider, const BaseSignatureCreato
 
     // Test solution
     sigdata.complete = solved && VerifyScript(sigdata.scriptSig, fromPubKey, &sigdata.scriptWitness, STANDARD_SCRIPT_VERIFY_FLAGS, creator.Checker());
+    std::cout << "\nPRODUCED SIGNATURE\n\n" << std::endl;
     return sigdata.complete;
 }
 
@@ -470,6 +520,8 @@ bool IsSegWitOutput(const SigningProvider& provider, const CScript& script)
 
 bool SignTransaction(CMutableTransaction& mtx, const SigningProvider* keystore, const std::map<COutPoint, Coin>& coins, int nHashType, std::map<int, std::string>& input_errors)
 {
+    std::cout << "\n\n\n\n **************** SIGN LOG ****************\n" << std::endl;
+    std::cout << "Signing!" << std::endl;
     bool fHashSingle = ((nHashType & ~SIGHASH_ANYONECANPAY) == SIGHASH_SINGLE);
 
     // Use CTransaction for the constant parts of the
@@ -487,10 +539,46 @@ bool SignTransaction(CMutableTransaction& mtx, const SigningProvider* keystore, 
         const CAmount& amount = coin->second.out.nValue;
 
         SignatureData sigdata = DataFromTransaction(mtx, i, coin->second.out);
+        std::cout<<"sigdata.witness: " << sigdata.witness<<std::endl;
+        std::cout<<"sigdata.complete: " << sigdata.complete<<std::endl;
+
+        std::cout <<"sigdata.scriptSig: ";
+        printCScriptPrevector(sigdata.scriptSig);
+        std::cout<<"sigdata.redeem_script: ";
+        printCScriptPrevector(sigdata.redeem_script);
+        std::cout<<"sigdata.witness_script: ";
+        printCScriptPrevector(sigdata.witness_script);
+
+        std::cout<<"sigdata.scriptWitness: " << sigdata.scriptWitness.ToString() << std::endl;
+        std::cout<<"sigdata.signatures.size: " << sigdata.signatures.size() << std::endl;
+        std::cout<<"sigdata.misc_pubkeys.size: " << sigdata.misc_pubkeys.size() << std::endl;
+        std::cout<<"sigdata.missing_pubkeys.size: " << sigdata.missing_pubkeys.size() << std::endl;
+        std::cout<<"sigdata.missing_sigs.size: " << sigdata.missing_sigs.size() << std::endl;
+        std::cout<<"sigdata.missing_redeem_script: " << sigdata.missing_redeem_script.ToString() <<std::endl;
+        std::cout<<"sigdata.missing_witness_script: " << sigdata.missing_witness_script.ToString() <<std::endl;
         // Only sign SIGHASH_SINGLE if there's a corresponding output:
         if (!fHashSingle || (i < mtx.vout.size())) {
             ProduceSignature(*keystore, MutableTransactionSignatureCreator(&mtx, i, amount, nHashType), prevPubKey, sigdata);
         }
+        std::cout << "\n\nAFTER SIGNING:\n"<<std::endl;
+
+        std::cout<<"sigdata.witness: " << sigdata.witness<<std::endl;
+        std::cout<<"sigdata.complete: " << sigdata.complete<<std::endl;
+
+        std::cout <<"sigdata.scriptSig: ";
+        printCScriptPrevector(sigdata.scriptSig);
+        std::cout<<"sigdata.redeem_script: ";
+        printCScriptPrevector(sigdata.redeem_script);
+        std::cout<<"sigdata.witness_script: ";
+        printCScriptPrevector(sigdata.witness_script);
+
+        std::cout<<"sigdata.scriptWitness: " << sigdata.scriptWitness.ToString() << std::endl;
+        std::cout<<"sigdata.signatures.size: " << sigdata.signatures.size() << std::endl;
+        std::cout<<"sigdata.misc_pubkeys.size: " << sigdata.misc_pubkeys.size() << std::endl;
+        std::cout<<"sigdata.missing_pubkeys.size: " << sigdata.missing_pubkeys.size() << std::endl;
+        std::cout<<"sigdata.missing_sigs.size: " << sigdata.missing_sigs.size() << std::endl;
+        std::cout<<"sigdata.missing_redeem_script: " << sigdata.missing_redeem_script.ToString() <<std::endl;
+        std::cout<<"sigdata.missing_witness_script: " << sigdata.missing_witness_script.ToString() <<std::endl;
 
         UpdateInput(txin, sigdata);
 
@@ -516,5 +604,6 @@ bool SignTransaction(CMutableTransaction& mtx, const SigningProvider* keystore, 
             input_errors.erase(i);
         }
     }
+    std::cout << "\n **************** END LOG ****************\n\n\n\n" << std::endl;
     return input_errors.empty();
 }

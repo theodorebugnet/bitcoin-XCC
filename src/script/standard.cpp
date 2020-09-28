@@ -3,6 +3,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <iostream>
+
 #include <script/standard.h>
 
 #include <crypto/sha256.h>
@@ -52,6 +54,7 @@ std::string GetTxnOutputType(TxoutType t)
     case TxoutType::PUBKEYHASH: return "pubkeyhash";
     case TxoutType::SCRIPTHASH: return "scripthash";
     case TxoutType::MULTISIG: return "multisig";
+    case TxoutType::XCCLOCK: return "xcclock";
     case TxoutType::NULL_DATA: return "nulldata";
     case TxoutType::WITNESS_V0_KEYHASH: return "witness_v0_keyhash";
     case TxoutType::WITNESS_V0_SCRIPTHASH: return "witness_v0_scripthash";
@@ -104,6 +107,29 @@ static bool MatchMultisig(const CScript& script, unsigned int& required, std::ve
     unsigned int keys = CScript::DecodeOP_N(opcode);
     if (pubkeys.size() != keys || keys < required) return false;
     return (it + 1 == script.end());
+}
+
+static bool MatchXCCLock(const CScript& script, valtype& vaultKey, valtype& userKey) {
+    std::cout << "Matching XXCLock script" << std::endl;
+    //0291dcc5418605d63fb6441d2127425eb8711749313131b45069c20e0f02bf01e7 OP_CHECKSIGVERIFY 02b3f7623cf09a02088eb66737e2d3d308ea21a1d4fa105fc5a1d1ac775c63182c OP_CHECKSIG OP_IFDUP OP_NOTIF 4194346 OP_CHECKSEQUENCEVERIFY OP_ENDIF
+    constexpr int scriptSize = CPubKey::COMPRESSED_SIZE * 2 + 9; // + timelock
+
+    printf("script[0]: %02x\n", script[0]);
+    std::cout << "script[" << CPubKey::COMPRESSED_SIZE + 1 << "]: " << GetOpName((opcodetype)script[CPubKey::COMPRESSED_SIZE + 1]) << std::endl;
+
+    if (script.size() >= scriptSize
+            && script[0] == CPubKey::COMPRESSED_SIZE
+            && script[CPubKey::COMPRESSED_SIZE + 1] == OP_CHECKSIGVERIFY
+            && script[CPubKey::COMPRESSED_SIZE + 2] == CPubKey::COMPRESSED_SIZE
+            && script[CPubKey::COMPRESSED_SIZE * 2 + 3] == OP_CHECKSIG
+            && script[CPubKey::COMPRESSED_SIZE * 2 + 4] == OP_IFDUP
+            && script[CPubKey::COMPRESSED_SIZE * 2 + 5] == OP_NOTIF
+        ) {
+        vaultKey = valtype(script.begin() + 1, script.begin() + CPubKey::COMPRESSED_SIZE + 1);
+        userKey = valtype(script.begin() + CPubKey::COMPRESSED_SIZE + 2, script.begin() + CPubKey::COMPRESSED_SIZE * 2 + 3);
+        return true;
+    }
+    return false;
 }
 
 TxoutType Solver(const CScript& scriptPubKey, std::vector<std::vector<unsigned char>>& vSolutionsRet)
@@ -165,6 +191,14 @@ TxoutType Solver(const CScript& scriptPubKey, std::vector<std::vector<unsigned c
         vSolutionsRet.insert(vSolutionsRet.end(), keys.begin(), keys.end());
         vSolutionsRet.push_back({static_cast<unsigned char>(keys.size())}); // safe as size is in range 1..16
         return TxoutType::MULTISIG;
+    }
+
+    std::vector<unsigned char> vaultKey, userKey;
+    if (MatchXCCLock(scriptPubKey, vaultKey, userKey)) {
+        std::cout << "MATCHED XCCLOCK!" << std::endl;
+        vSolutionsRet.push_back(std::move(vaultKey));
+        vSolutionsRet.push_back(std::move(userKey));
+        return TxoutType::XCCLOCK;
     }
 
     vSolutionsRet.clear();
