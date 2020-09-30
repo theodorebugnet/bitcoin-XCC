@@ -116,6 +116,8 @@ static bool MatchXCCLock(const CScript& script, valtype& vaultKey, valtype& user
 
     printf("script[0]: %02x\n", script[0]);
     std::cout << "script[" << CPubKey::COMPRESSED_SIZE + 1 << "]: " << GetOpName((opcodetype)script[CPubKey::COMPRESSED_SIZE + 1]) << std::endl;
+    printf("script[%d]: %02x\n", CPubKey::COMPRESSED_SIZE + 2, script[CPubKey::COMPRESSED_SIZE + 2]);
+    std::cout << "script[" << CPubKey::COMPRESSED_SIZE * 2 + 3 << "]: " << GetOpName((opcodetype)script[CPubKey::COMPRESSED_SIZE * 2 + 3]) << std::endl;
 
     if (script.size() >= scriptSize
             && script[0] == CPubKey::COMPRESSED_SIZE
@@ -126,7 +128,7 @@ static bool MatchXCCLock(const CScript& script, valtype& vaultKey, valtype& user
             && script[CPubKey::COMPRESSED_SIZE * 2 + 5] == OP_NOTIF
         ) {
         vaultKey = valtype(script.begin() + 1, script.begin() + CPubKey::COMPRESSED_SIZE + 1);
-        userKey = valtype(script.begin() + CPubKey::COMPRESSED_SIZE + 2, script.begin() + CPubKey::COMPRESSED_SIZE * 2 + 3);
+        userKey = valtype(script.begin() + CPubKey::COMPRESSED_SIZE + 3, script.begin() + CPubKey::COMPRESSED_SIZE * 2 + 3);
         return true;
     }
     return false;
@@ -196,6 +198,14 @@ TxoutType Solver(const CScript& scriptPubKey, std::vector<std::vector<unsigned c
     std::vector<unsigned char> vaultKey, userKey;
     if (MatchXCCLock(scriptPubKey, vaultKey, userKey)) {
         std::cout << "MATCHED XCCLOCK!" << std::endl;
+        for (auto i = vaultKey.begin(); i != vaultKey.end(); i++) {
+            printf("%02x", *i);
+        }
+        std::cout << std::endl;
+        for (auto i = userKey.begin(); i != userKey.end(); i++) {
+            printf("%02x", *i);
+        }
+        std::cout << std::endl;
         vSolutionsRet.push_back(std::move(vaultKey));
         vSolutionsRet.push_back(std::move(userKey));
         return TxoutType::XCCLOCK;

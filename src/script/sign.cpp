@@ -25,6 +25,13 @@ void printCScriptPrevector(CScript scr) {
     std::cout << std::endl;
 }
 
+void printCPubKey(CPubKey key) {
+    for (unsigned int i = 0; i < key.size(); i++) {
+        printf("%02x", key[i]);
+    }
+    std::cout << std::endl;
+}
+
 std::string TxoutTypeToString(TxoutType type) {
     switch (type) {
         case TxoutType::NONSTANDARD:
@@ -146,6 +153,14 @@ static bool SignStep(const SigningProvider& provider, const BaseSignatureCreator
     whichTypeRet = Solver(scriptPubKey, vSolutions);
 
     std::cout << "Found TxoutType: " << TxoutTypeToString(whichTypeRet) << std::endl;
+    std::cout << "Found " << vSolutions.size() << "solutions:" <<std::endl;
+    for (auto j = vSolutions.begin(); j != vSolutions.end(); j++) {
+        for (auto i = j->begin(); i != j->end(); i++) {
+            printf("%02x", *i);
+        }
+        printf("\n");
+    }
+    printf("\n");
 
     switch (whichTypeRet)
     {
@@ -201,6 +216,34 @@ static bool SignStep(const SigningProvider& provider, const BaseSignatureCreator
         }
         return ok;
     }
+
+    case TxoutType::XCCLOCK: {
+        //TODO: Create sig and return results here
+        std::cout << std::endl;
+        CPubKey vaultKey = CPubKey(vSolutions[0]);
+        CPubKey clientKey = CPubKey(vSolutions[1]);
+        std::cout<<"Vault pubkey: ";
+        printCPubKey(vaultKey);
+        std::cout<<"Client pubkey: ";
+        printCPubKey(clientKey);
+
+        bool ok = false; // considered OK if we have at least the vault sig
+        // will be invalidated later if timelock still locked
+        if (CreateSig(creator, sigdata, provider, sig, vaultKey, scriptPubKey, sigversion)) {
+            std::cout << "Succesfully signed vault key!" << std::endl;
+            ret.push_back(std::move(sig));
+            ok = true;
+        }
+        // now attempt to sign client, if it was provided
+        // TODO: figure out PSBT integration to ensure it can be correct
+        if (CreateSig(creator, sigdata, provider, sig, clientKey, scriptPubKey, sigversion)) {
+            std::cout << "Succesfully signed client key!" << std::endl;
+            ret.push_back(std::move(sig));
+        }
+
+        return ok;
+     }
+
     case TxoutType::WITNESS_V0_KEYHASH:
         ret.push_back(vSolutions[0]);
         return true;
@@ -282,6 +325,7 @@ bool ProduceSignature(const SigningProvider& provider, const BaseSignatureCreato
         sigdata.witness_script = witnessscript;
         TxoutType subType;
         solved = solved && SignStep(provider, creator, witnessscript, result, subType, SigVersion::WITNESS_V0, sigdata) && subType != TxoutType::SCRIPTHASH && subType != TxoutType::WITNESS_V0_SCRIPTHASH && subType != TxoutType::WITNESS_V0_KEYHASH;
+        std::cout << "\nSOLVED WSH! solved: " << solved << std::endl;
         result.push_back(std::vector<unsigned char>(witnessscript.begin(), witnessscript.end()));
         sigdata.scriptWitness.stack = result;
         sigdata.witness = true;
