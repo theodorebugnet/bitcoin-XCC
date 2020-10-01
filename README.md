@@ -1,80 +1,58 @@
-Bitcoin Core integration/staging tree
+Bitcoin Core - forked for XCC
 =====================================
 
-https://bitcoincore.org
+This is a fork of Bitcoin Core which supports signing transactions locked with
+P2WSH scripts used in XCLAIM Commit. The main use for it is for invoking the
+`signrawtransactionwithkey` RPC: there is no wallet support or integration.
 
-What is Bitcoin?
-----------------
+There is no explicit support for partially-signed transactions, and it has not
+yet been properly tested in a context where each party signs separately.
 
-Bitcoin is an experimental digital currency that enables instant payments to
-anyone, anywhere in the world. Bitcoin uses peer-to-peer technology to operate
-with no central authority: managing transactions and issuing money are carried
-out collectively by the network. Bitcoin Core is the name of open source
-software which enables the use of this currency.
+XCC
+---
+See the thesis (link TBA).
 
-For more information, as well as an immediately usable, binary version of
-the Bitcoin Core software, see https://bitcoincore.org/en/download/, or read the
-[original whitepaper](https://bitcoincore.org/bitcoin.pdf).
+Script output that this fork can sign:
+```
+<vault_sig> OP_CHECKSIGVERIFY <user_sig> OP_CHECKSIG OP_IFDUP OP_NOTIF
+    <checkpoint_CSV_locktime> OP_CHECKSEQUENCEVERIFY
+OP_ENDIF
+```
 
-License
--------
+This can be spent by a double vault + user multisig signing, or by the vault
+alone once the CSV locktime has passed.
 
-Bitcoin Core is released under the terms of the MIT license. See [COPYING](COPYING) for more
-information or see https://opensource.org/licenses/MIT.
+This is the output of Issue and Checkpoint transactions. Checkpoint, Recover,
+Escape and Redeem transactions must spend from this output. Escape and Redeem
+use conventional single-sign outputs (e.g. P2WPK, but this is not specified,
+could be P2PKH, P2SH-P2WPK, etc., subject to preference).
 
-Development Process
--------------------
+The Recover transaction uses an HTLC script in its output. Spending from that
+is currently not supported by this fork.
 
-The `master` branch is regularly built (see `doc/build-*.md` for instructions) and tested, but it is not guaranteed to be
-completely stable. [Tags](https://github.com/bitcoin/bitcoin/tags) are created
-regularly from release branches to indicate new official, stable release versions of Bitcoin Core.
+Building
+-----
+Follow the instructions in the Bitcoin documentation. Consider disabling
+unnecessary components during the configure step if this is not going to be used
+as the primary node, e.g.:
+```
+./configure --without-miniupnpc --disable-bench --without-gui
+```
 
-The https://github.com/bitcoin-core/gui repository is used exclusively for the
-development of the GUI. Its master branch is identical in all monotree
-repositories. Release branches and tags do not exist, so please do not fork
-that repository unless it is for development reasons.
+Usage
+---
+When spending from an Issue or Checkpoint transaction, use the
+`signrawtransactionwithkey` RPC using this fork to generate a valid witness. The
+signed transaction can then be broadcast on a separate node (e.g. using mainline
+Bitcoin Core), at will.
 
-The contribution workflow is described in [CONTRIBUTING.md](CONTRIBUTING.md)
-and useful hints for developers can be found in [doc/developer-notes.md](doc/developer-notes.md).
+E.g.
 
-Testing
--------
+./bitcoin-cli signrawtransactionwithkey <prepared spending TX hex> '["private key(s)"]' '[{"txid": "<issue or checkpoint txid>", "vout":<vout>, "scriptPubKey":"<issue/checkpoint scriptPubKey (P2WSH)>", "witnessScript":"21<vaultpubkey(33 bytes)>ad21<clientpubkey(33 bytes)>ac7364032a0040b268", "amount":<amount spent from the checkpoint>}]'
 
-Testing and code review is the bottleneck for development; we get more pull
-requests than we can review and test on short notice. Please be patient and help out by testing
-other people's pull requests, and remember this is a security-critical project where any mistake might cost people
-lots of money.
 
-### Automated Testing
+Full Node
+---
+Due to being a fork of Bitcoin Core, it can also be used as a full node, especially if it's compiled with support for wallet, gui etc. This may be convenient for testing and development.
 
-Developers are strongly encouraged to write [unit tests](src/test/README.md) for new code, and to
-submit new unit tests for old code. Unit tests can be compiled and run
-(assuming they weren't disabled in configure) with: `make check`. Further details on running
-and extending unit tests can be found in [/src/test/README.md](/src/test/README.md).
-
-There are also [regression and integration tests](/test), written
-in Python, that are run automatically on the build server.
-These tests can be run (if the [test dependencies](/test) are installed) with: `test/functional/test_runner.py`
-
-The Travis CI system makes sure that every pull request is built for Windows, Linux, and macOS, and that unit/sanity tests are run automatically.
-
-### Manual Quality Assurance (QA) Testing
-
-Changes should be tested by somebody other than the developer who wrote the
-code. This is especially important for large or high-risk changes. It is useful
-to add a test plan to the pull request description if testing the changes is
-not straightforward.
-
-Translations
-------------
-
-Changes to translations as well as new translations can be submitted to
-[Bitcoin Core's Transifex page](https://www.transifex.com/bitcoin/bitcoin/).
-
-Translations are periodically pulled from Transifex and merged into the git repository. See the
-[translation process](doc/translation_process.md) for details on how this works.
-
-**Important**: We do not accept translation changes as GitHub pull requests because the next
-pull from Transifex would automatically overwrite them again.
-
-Translators should also subscribe to the [mailing list](https://groups.google.com/forum/#!forum/bitcoin-translators).
+Obviously, being an unofficial fork, it is not recommended for use on the mainnet.
