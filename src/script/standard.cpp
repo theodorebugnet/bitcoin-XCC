@@ -3,8 +3,6 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <iostream>
-
 #include <script/standard.h>
 
 #include <crypto/sha256.h>
@@ -110,14 +108,7 @@ static bool MatchMultisig(const CScript& script, unsigned int& required, std::ve
 }
 
 static bool MatchXCCLock(const CScript& script, valtype& vaultKey, valtype& userKey) {
-    std::cout << "Matching XXCLock script" << std::endl;
-    //0291dcc5418605d63fb6441d2127425eb8711749313131b45069c20e0f02bf01e7 OP_CHECKSIGVERIFY 02b3f7623cf09a02088eb66737e2d3d308ea21a1d4fa105fc5a1d1ac775c63182c OP_CHECKSIG OP_IFDUP OP_NOTIF 4194346 OP_CHECKSEQUENCEVERIFY OP_ENDIF
     constexpr int scriptSize = CPubKey::COMPRESSED_SIZE * 2 + 9; // + timelock
-
-    printf("script[0]: %02x\n", script[0]);
-    std::cout << "script[" << CPubKey::COMPRESSED_SIZE + 1 << "]: " << GetOpName((opcodetype)script[CPubKey::COMPRESSED_SIZE + 1]) << std::endl;
-    printf("script[%d]: %02x\n", CPubKey::COMPRESSED_SIZE + 2, script[CPubKey::COMPRESSED_SIZE + 2]);
-    std::cout << "script[" << CPubKey::COMPRESSED_SIZE * 2 + 3 << "]: " << GetOpName((opcodetype)script[CPubKey::COMPRESSED_SIZE * 2 + 3]) << std::endl;
 
     if (script.size() >= scriptSize
             && script[0] == CPubKey::COMPRESSED_SIZE
@@ -197,15 +188,6 @@ TxoutType Solver(const CScript& scriptPubKey, std::vector<std::vector<unsigned c
 
     std::vector<unsigned char> vaultKey, userKey;
     if (MatchXCCLock(scriptPubKey, vaultKey, userKey)) {
-        std::cout << "MATCHED XCCLOCK!" << std::endl;
-        for (auto i = vaultKey.begin(); i != vaultKey.end(); i++) {
-            printf("%02x", *i);
-        }
-        std::cout << std::endl;
-        for (auto i = userKey.begin(); i != userKey.end(); i++) {
-            printf("%02x", *i);
-        }
-        std::cout << std::endl;
         vSolutionsRet.push_back(std::move(vaultKey));
         vSolutionsRet.push_back(std::move(userKey));
         return TxoutType::XCCLOCK;

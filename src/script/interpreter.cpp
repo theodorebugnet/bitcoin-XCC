@@ -3,8 +3,6 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <iostream>
-
 #include <script/interpreter.h>
 
 #include <crypto/ripemd160.h>
@@ -344,13 +342,6 @@ public:
 };
 }
 
-void printCScript(CScript scr) {
-    for (auto i = scr.begin(); i != scr.end(); i++) {
-        printf("%02x", *i);
-    }
-    std::cout << std::endl;
-}
-
 /** Helper for OP_CHECKSIG and OP_CHECKSIGVERIFY
  *
  * A return value of false means the script fails entirely. When true is returned, the
@@ -372,26 +363,7 @@ static bool EvalChecksig(const valtype& vchSig, const valtype& vchPubKey, CScrip
         //serror is set
         return false;
     }
-    std::cout << "\nEVALING CHECKSIG\n" << std::endl;
-
-    std::cout << "vchSig: ";
-    for (unsigned int i = 0; i < vchSig.size(); i++) {
-        printf("%02x", vchSig[i]);
-    }
-    std::cout << std::endl;
-
-    std::cout << "vchPubKey: ";
-    for (unsigned int i = 0; i < vchPubKey.size(); i++) {
-        printf("%02x", vchPubKey[i]);
-    }
-    std::cout << std::endl;
-
-    std::cout << "CScript: ";
-    printCScript(scriptCode);
-
     fSuccess = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
-
-    std::cout << "fSuccess: " << fSuccess << std::endl;
 
     if (!fSuccess && (flags & SCRIPT_VERIFY_NULLFAIL) && vchSig.size())
         return set_error(serror, SCRIPT_ERR_SIG_NULLFAIL);
@@ -401,7 +373,6 @@ static bool EvalChecksig(const valtype& vchSig, const valtype& vchPubKey, CScrip
 
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror)
 {
-    std::cout << "\nEVALING SCRIPT\n" << std::endl;
     static const CScriptNum bnZero(0);
     static const CScriptNum bnOne(1);
     // static const CScriptNum bnFalse(0);
@@ -1353,13 +1324,8 @@ template <class T>
 uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn, int nHashType, const CAmount& amount, SigVersion sigversion, const PrecomputedTransactionData* cache)
 {
     assert(nIn < txTo.vin.size());
-    std::cout << "HASHING FOR SIGNATURE" << std::endl;
-
-    std::cout << "nIn: " << nIn << std::endl;
-    std::cout << "nHashType: " << nHashType << std::endl;
 
     if (sigversion == SigVersion::WITNESS_V0) {
-        std::cout << "hashing witness..." << std::endl;
         uint256 hashPrevouts;
         uint256 hashSequence;
         uint256 hashOutputs;
@@ -1385,33 +1351,22 @@ uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn
         CHashWriter ss(SER_GETHASH, 0);
         // Version
         ss << txTo.nVersion;
-        std::cout << "txTo.nVersion: " << txTo.nVersion << std::endl;
         // Input prevouts/nSequence (none/all, depending on flags)
         ss << hashPrevouts;
-        std::cout << "hashPrevouts: " << hashPrevouts.ToString() << std::endl;
         ss << hashSequence;
-        std::cout << "hashSequence: " << hashSequence.ToString() << std::endl;
         // The input being signed (replacing the scriptSig with scriptCode + amount)
         // The prevout may already be contained in hashPrevout, and the nSequence
         // may already be contain in hashSequence.
         ss << txTo.vin[nIn].prevout;
-        std::cout << "txTo.vin[nIn].prevout: " << txTo.vin[nIn].prevout.ToString() << std::endl;
         ss << scriptCode;
-        std::cout << "scriptCode: ";
-        printCScript(scriptCode);
         ss << amount;
-        std::cout << "amount: " << amount << std::endl;
         ss << txTo.vin[nIn].nSequence;
-        std::cout << "txTo.vin[nIn].nSequence: " << txTo.vin[nIn].nSequence << std::endl;
         // Outputs (none/one/all, depending on flags)
         ss << hashOutputs;
-        std::cout << "hashOutputs: " << hashOutputs.ToString() << std::endl;
         // Locktime
         ss << txTo.nLockTime;
-        std::cout <<"txTo.nLockTime: " << txTo.nLockTime << std::endl;
         // Sighash type
         ss << nHashType;
-        std::cout << "nHashType: " << nHashType << std::endl;
 
         return ss.GetHash();
     }
@@ -1452,9 +1407,7 @@ bool GenericTransactionSignatureChecker<T>::CheckSig(const std::vector<unsigned 
         return false;
     int nHashType = vchSig.back();
     vchSig.pop_back();
-    std::cout << "Amount in CheckSig: " << amount << std::endl;
     uint256 sighash = SignatureHash(scriptCode, *txTo, nIn, nHashType, amount, sigversion, this->txdata);
-    std::cout << "SIGHASH BEING CHECKED: " << sighash.ToString() << std::endl;
     if (!VerifySignature(vchSig, pubkey, sighash))
         return false;
 
@@ -1569,7 +1522,6 @@ static bool ExecuteWitnessScript(const Span<const valtype>& stack_span, const CS
 
 static bool VerifyWitnessProgram(const CScriptWitness& witness, int witversion, const std::vector<unsigned char>& program, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* serror)
 {
-    std::cout << "\nVERIFYING WITNESS PROGRAM\n" << std::endl;
     CScript scriptPubKey;
     Span<const valtype> stack{witness.stack};
 
@@ -1609,7 +1561,6 @@ static bool VerifyWitnessProgram(const CScriptWitness& witness, int witversion, 
 
 bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* serror)
 {
-    std::cout << "\nVERIFYING SCRIPT\n" << std::endl;
     static const CScriptWitness emptyWitness;
     if (witness == nullptr) {
         witness = &emptyWitness;
